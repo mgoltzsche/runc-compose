@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "services": {
+    "consul": {
+      "image": "docker://consul:0.8.2",
+      "command": [
+        "agent",
+        "-server",
+        "-ui",
+        "-bootstrap-expect",
+        "1",
+        "-log-level",
+        "info",
+        "-bind",
+        "0.0.0.0",
+        "-client",
+        "0.0.0.0",
+        "-dns-port",
+        "53",
+        "-recursor",
+        "8.8.8.8"
+      ],
+      "environment": {
+        "CONSUL_ALLOW_PRIVILEGED_PORTS": ""
+      }
+    }
+  }
+}

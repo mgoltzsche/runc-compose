@@ -12,3 +12,12 @@
 
 # Project-local glide cache, RE: https://github.com/Masterminds/glide/issues/736
 .glide/
+
+
+
+
+bin/
+pkg/
+src/gopkg.in/
+src/github.com/appc/
+test-resources/volumes/

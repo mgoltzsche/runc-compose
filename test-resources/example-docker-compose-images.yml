@@ -1,0 +1,28 @@
+version: '2'
+services:
+  myservice:
+    image: alpine:latest
+    entrypoint: ["/bin/sh", "-c", "term() {\necho Terminating; sleep 3; echo Terminated; exit 0\n}\n trap term SIGHUP SIGINT SIGQUIT SIGTERM && echo hello from fetched container; sleep 60; echo terminated"]
+    env_file:
+      - ./extended.env
+    environment:
+      HTTP_HOST: service.example.org
+      HTTP_PORT: 80
+    volumes:
+      - data:/data
+      - ./example-docker-compose-images.yml:/images.yml
+      - ./reference-model.yml:/example.yml
+    healthcheck:
+      test: echo healthy myservice
+      interval: "10s"
+  selfbuilt:
+    build: docker-build
+    volumes:
+      - data:/var/data
+    healthcheck:
+      test: echo healthy selfbuilt
+      interval: "10s"
+    stop_grace_period: "10s"
+volumes:
+  data:
+    external: true
