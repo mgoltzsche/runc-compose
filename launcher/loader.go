@@ -3,8 +3,8 @@ package launcher
 import (
 	"bufio"
 	"fmt"
-	"github.com/mgoltzsche/rkt-compose/log"
-	"github.com/mgoltzsche/rkt-compose/model"
+	"github.com/mgoltzsche/runc-compose/log"
+	"github.com/mgoltzsche/runc-compose/model"
 	"os"
 	"path"
 	"path/filepath"

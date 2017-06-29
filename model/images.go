@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/appc/docker2aci/lib"
-	"github.com/appc/docker2aci/lib/common"
-	"github.com/mgoltzsche/rkt-compose/log"
+	"github.com/mgoltzsche/runc-compose/log"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -137,40 +135,8 @@ func (self *Images) importLocalDockerImage(imgName string) error {
 		return fmt.Errorf("Cannot export docker image %q: %s. %s", imgName, err, out)
 	}
 	self.debug.Println("Converting docker image to ACI...")
-	tmpDir := os.TempDir()
-	d2aCfg := docker2aci.FileConfig{
-		CommonConfig: docker2aci.CommonConfig{
-			Squash:      true,
-			OutputDir:   tmpDir,
-			TmpDir:      tmpDir,
-			Compression: common.GzipCompression,
-			Debug:       self.debug,
-			Info:        self.debug,
-		},
-		DockerURL: "",
-	}
-	aciLayerPaths, err := docker2aci.ConvertSavedFile(dockerImgFile.Name(), d2aCfg)
-	if err != nil {
-		return fmt.Errorf("Cannot convert docker image to ACI: %s", err)
-	}
-	if len(aciLayerPaths) < 1 {
-		return fmt.Errorf("No ACI files returned by docker2aci")
-	}
-	for _, f := range aciLayerPaths {
-		defer removeFile(f)
-	}
-	self.debug.Println("Importing ACI file...")
-	var stderr bytes.Buffer
-	c := exec.Command("rkt", "prepare", "--quiet=true", "--insecure-options=image", aciLayerPaths[0])
-	c.Stderr = &stderr
-	out, err = c.Output()
-	if err != nil {
-		return fmt.Errorf("Cannot import converted docker image: %s. %s", err, stderr.String())
-	}
-	cId := strings.TrimRight(string(out), "\n")
-	if e := exec.Command("rkt", "rm", cId).Run(); e != nil {
-		return fmt.Errorf("Cannot remove rkt pod %q used to import converted docker image: %s", cId, e)
-	}
+	// TODO: implement image import using skopeo
+	panic("TODO: implement image import using skopeo")
 	return nil
 }
 

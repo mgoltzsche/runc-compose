@@ -3,8 +3,8 @@ package launcher
 import (
 	"errors"
 	"fmt"
-	"github.com/mgoltzsche/rkt-compose/checks"
-	"github.com/mgoltzsche/rkt-compose/log"
+	"github.com/mgoltzsche/runc-compose/checks"
+	"github.com/mgoltzsche/runc-compose/log"
 	"time"
 )
 

@@ -3,9 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/mgoltzsche/rkt-compose/launcher"
-	"github.com/mgoltzsche/rkt-compose/log"
-	"github.com/mgoltzsche/rkt-compose/model"
+	"github.com/mgoltzsche/runc-compose/launcher"
+	"github.com/mgoltzsche/runc-compose/log"
+	"github.com/mgoltzsche/runc-compose/model"
 	"os"
 	"os/signal"
 	"os/user"

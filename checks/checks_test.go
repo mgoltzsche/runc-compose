@@ -2,7 +2,7 @@ package checks
 
 import (
 	"fmt"
-	"github.com/mgoltzsche/rkt-compose/log"
+	"github.com/mgoltzsche/runc-compose/log"
 	"strings"
 	"testing"
 	"time"
