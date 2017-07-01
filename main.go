@@ -3,12 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/mgoltzsche/runc-compose/images"
 	"github.com/mgoltzsche/runc-compose/launcher"
 	"github.com/mgoltzsche/runc-compose/log"
 	"github.com/mgoltzsche/runc-compose/model"
 	"os"
 	"os/signal"
-	"os/user"
 	"path/filepath"
 	"strconv"
 	"syscall"
@@ -65,9 +65,8 @@ var (
 	consulCheckTtl         time.Duration
 
 	// runtime vars
-	errorLog      = log.NewStdLogger(os.Stderr)
-	debugLog      = log.NewNopLogger()
-	fetchImagesAs model.UserGroup
+	errorLog = log.NewStdLogger(os.Stderr)
+	debugLog = log.NewNopLogger()
 )
 
 type StringSlice []string
@@ -113,9 +112,8 @@ func main() {
 	initFlags()
 	flag.Parse()
 
-	if err := validateFlags(); err != nil {
-		errorLog.Println(err)
-		os.Exit(1)
+	if verbose {
+		debugLog = log.NewStdLogger(os.Stderr)
 	}
 
 	if flag.NArg() != 2 {
@@ -141,56 +139,12 @@ func main() {
 	}
 }
 
-func validateFlags() error {
-	// Init logger
-	if verbose {
-		debugLog = log.NewStdLogger(os.Stderr)
-	}
-	// Init fetchAs
-	u, err := user.LookupId(fetchUid)
-	if err != nil {
-		u, err = user.Lookup(fetchUid)
-		if err != nil {
-			return fmt.Errorf("Cannot find user %q", fetchUid)
-		}
-	}
-	g, err := user.LookupGroupId(fetchGid)
-	if err != nil {
-		g, err = user.LookupGroup(fetchGid)
-		if err != nil {
-			return fmt.Errorf("Cannot find group %q", fetchGid)
-		}
-	}
-	uid, err := strconv.ParseUint(u.Uid, 10, 32)
-	if err != nil {
-		panic("Cannot parse user ID: " + u.Uid)
-	}
-	gid, err := strconv.ParseUint(g.Gid, 10, 32)
-	if err != nil {
-		panic("Cannot parse group ID: " + g.Gid)
-	}
-	gids, err := u.GroupIds()
-	if err != nil {
-		panic("Could not look up user's group IDs: " + err.Error())
-	}
-	hasGid := false
-	for _, gid := range gids {
-		if g.Gid == gid {
-			hasGid = true
-			break
-		}
-	}
-	if !hasGid {
-		return fmt.Errorf("User %s is not in group %s", fetchUid, fetchGid)
-	}
-	fetchImagesAs.Uid = uint32(uid)
-	fetchImagesAs.Gid = uint32(gid)
-	return nil
-}
-
 func runPod(podFile string) (err error) {
 	models := model.NewDescriptors(defaultVolumeDirectory)
-	imgs := model.NewImages(model.PULL_NEW, &fetchImagesAs, debugLog)
+	imgs, err := images.NewImages("workspace/images", images.PULL_NEW, debugLog)
+	if err != nil {
+		return
+	}
 	loader := launcher.NewLoader(models, imgs, defaultVolumeDirectory, errorLog, debugLog)
 	descr, err := models.Descriptor(podFile)
 	if err != nil {

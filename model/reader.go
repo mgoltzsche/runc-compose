@@ -157,7 +157,7 @@ func (self *Descriptors) transformDockerCompose(c *dockerCompose, r *PodDescript
 			if v.Build == nil {
 				s.Image = "docker://" + v.Image
 			} else {
-				s.Image = v.Image
+				s.Image = "docker-daemon://" + v.Image
 			}
 		}
 		s.Build = toServiceBuildDescriptor(v.Build, p+".build")

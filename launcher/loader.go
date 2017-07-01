@@ -3,6 +3,7 @@ package launcher
 import (
 	"bufio"
 	"fmt"
+	"github.com/mgoltzsche/runc-compose/images"
 	"github.com/mgoltzsche/runc-compose/log"
 	"github.com/mgoltzsche/runc-compose/model"
 	"os"
@@ -18,13 +19,13 @@ var toIdRegexp = regexp.MustCompile("[^a-z0-9]+")
 
 type Loader struct {
 	descriptors          *model.Descriptors
-	images               *model.Images
+	images               *images.Images
 	defaultVolumeBaseDir string
 	substitutes          *Substitutes
 	debug                log.Logger
 }
 
-func NewLoader(descriptors *model.Descriptors, images *model.Images, defaultVolumeBaseDir string, warn, debug log.Logger) *Loader {
+func NewLoader(descriptors *model.Descriptors, imgs *images.Images, defaultVolumeBaseDir string, warn, debug log.Logger) *Loader {
 	env := map[string]string{}
 	_, err := os.Stat(".env")
 	if err == nil {
@@ -36,7 +37,7 @@ func NewLoader(descriptors *model.Descriptors, images *model.Images, defaultVolu
 		s := strings.SplitN(e, "=", 2)
 		env[s[0]] = s[1]
 	}
-	return &Loader{descriptors, images, defaultVolumeBaseDir, NewSubstitutes(env, warn), debug}
+	return &Loader{descriptors, imgs, defaultVolumeBaseDir, NewSubstitutes(env, warn), debug}
 }
 
 func (self *Loader) LoadPod(d *model.PodDescriptor) (pod *Pod, err error) {
@@ -97,7 +98,7 @@ func (self *Loader) toServices(d *model.PodDescriptor) (map[string]*Service, err
 		s[k] = dest
 	}
 	for _, v := range s {
-		var img *model.ImageMetadata
+		var img *images.ImageMetadata
 		var err error
 		if imgBuild, ok := build[v.Image]; ok {
 			err = imgBuild()
@@ -207,7 +208,7 @@ func (self *Loader) generateImageName(df string) (string, error) {
 		return "", fmt.Errorf("cannot access dockerfile %q: %s", df, err)
 	}
 	tag := st.ModTime().Format("20060102150405")
-	return "local/" + toId(df) + ":" + tag, nil
+	return "docker-daemon:local/" + toId(df) + ":" + tag, nil
 }
 
 func (self *Loader) toEnvironment(s *model.ServiceDescriptor, podFile string, e map[string]string) (err error) {
