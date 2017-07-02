@@ -17,15 +17,17 @@ REPOPATH="$(cd "$REPOPATH" && pwd)"
 
 case "$1" in
 	install|'')
+		# Exclude ostree since not available on ubuntu 16.04
+		BUILDTAGS=containers_image_ostree_stub
 		(
 		set -x
 
 		# Format code
-		gofmt -w "$REPOPATH" &&
+		(find . -mindepth 1 -maxdepth 1 -type d; ls *.go) | grep -vx './build' | xargs -n1 -I'{}' gofmt -w "$REPOPATH/{}" &&
 
 		# Create workspace
 		export GOPATH="$REPOPATH/build" &&
-		export GO15VENDOREXPERIMENT=1 &&
+		#export GO15VENDOREXPERIMENT=1 &&
 		mkdir -p "$GOPATH/src/github.com/mgoltzsche/runc-compose" &&
 		ln -sf "$REPOPATH"/* "$GOPATH/src/github.com/mgoltzsche/runc-compose/" &&
 		ln -sf "$REPOPATH/vendor.conf" "$GOPATH/vendor.conf" &&
@@ -47,12 +49,12 @@ case "$1" in
 		fi
 
 		# Build linked binary to $GOPATH/bin/rkt-compose
-		go build -o bin/runc-compose github.com/mgoltzsche/runc-compose &&
+		go build -o bin/runc-compose -tags "$BUILDTAGS" github.com/mgoltzsche/runc-compose &&
 
 		# Build and run tests
-		go test github.com/mgoltzsche/runc-compose/checks &&
-		go test github.com/mgoltzsche/runc-compose/model &&
-		go test github.com/mgoltzsche/runc-compose/launcher
+		go test -tags "$BUILDTAGS" github.com/mgoltzsche/runc-compose/checks &&
+		go test -tags "$BUILDTAGS" github.com/mgoltzsche/runc-compose/model &&
+		go test -tags "$BUILDTAGS" github.com/mgoltzsche/runc-compose/launcher
 		) || exit 1
 
 		cat <<-EOF

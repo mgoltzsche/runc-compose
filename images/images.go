@@ -10,6 +10,8 @@ import (
 	"github.com/containers/image/transports/alltransports"
 	"github.com/containers/image/types"
 	"github.com/mgoltzsche/runc-compose/log"
+	spec "github.com/opencontainers/image-spec/specs-go/v1"
+	//"github.com/opencontainers/image-tools/image"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -70,10 +72,9 @@ func (self *Images) fetchImage(name string, pullPolicy PullPolicy) (r *ImageMeta
 		return
 	}
 	imgDir := self.toImageDirectory(name)
-	imgJsonFile := imgDir + ".json"
 	r = &ImageMetadata{name, "", []string{}, "", map[string]string{}, map[string]*ImagePort{}, map[string]string{}}
 	// Try to load image from local store
-	err = unmarshalJSON(imgJsonFile, r)
+	err = readImageConfig(imgDir, r)
 	if err == nil {
 		self.images[name] = r
 		return
@@ -87,38 +88,19 @@ func (self *Images) fetchImage(name string, pullPolicy PullPolicy) (r *ImageMeta
 		return nil, fmt.Errorf("Cannot create image directory: %v", err)
 	}
 	r.Directory = imgDir
-	imgType := strings.SplitN(name, ":", 2)[0]
-	if imgType == "docker" || imgType == "docker-daemon" {
-		tmpDir, err := ioutil.TempDir("", "image-")
-		if err != nil {
-			return nil, fmt.Errorf("Cannot create image temp directory: %s", err)
-		}
-		defer os.RemoveAll(tmpDir)
-		err = self.copyImage(name, "dir:"+tmpDir)
-		if err != nil {
-			return nil, fmt.Errorf("Cannot fetch image: %v", err)
-		}
-		err = convertDockerImageConfig(tmpDir, r)
-		if err != nil {
-			return nil, fmt.Errorf("Cannot read docker image config: %v", err)
-		}
-		err = self.copyImage("dir:"+tmpDir, "oci:"+imgDir)
-		if err != nil {
-			return nil, fmt.Errorf("Cannot copy temporary docker image into store: %v", err)
-		}
-	} else {
-		err = self.copyImage(name, "oci:"+imgDir)
-		if err != nil {
-			return nil, fmt.Errorf("Cannot fetch image: %v", err)
-		}
-	}
-	json, err := json.Marshal(r)
+	err = self.copyImage(name, "oci:"+imgDir)
 	if err != nil {
-		return nil, fmt.Errorf("Cannot marshal image config: %v", err)
+		return nil, fmt.Errorf("Cannot fetch image: %v", err)
 	}
-	err = ioutil.WriteFile(imgJsonFile, json, 0660)
+	err = readImageConfig(imgDir, r)
 	if err != nil {
-		return nil, fmt.Errorf("Cannot write image config: %v", err)
+		return nil, fmt.Errorf("Cannot read %q image config: %v", name, err)
+	}
+	// TODO: create container from OCI layout image
+	//err = image.UnpackLayout(imgDir, "/tmp/oci-container", "")
+	// err = image.CreateRuntimeBundleLayout(imgDir, "/tmp/oci-container", "", "/tmp/mycontainer")
+	if err != nil {
+		return nil, fmt.Errorf("Unpacking OCI layout failed: %v", err)
 	}
 	self.images[name] = r
 	return
@@ -132,31 +114,48 @@ func (self *Images) toImageDirectory(imgName string) string {
 	return filepath.Join(self.imageDirectory, buf.String())
 }
 
-func convertDockerImageConfig(dir string, dest *ImageMetadata) error {
-	var manifest dockerImageManifest
-	err := unmarshalJSON(filepath.Join(dir, "manifest.json"), &manifest)
+func readImageConfig(imgDir string, dest *ImageMetadata) error {
+	var idx spec.Index
+	err := unmarshalJSON(filepath.Join(imgDir, "index.json"), &idx)
 	if err != nil {
-		return fmt.Errorf("Cannot read docker image manifest: %v", err)
+		return fmt.Errorf("Cannot read OCI image index: %v", err)
 	}
-	if manifest.Config.MediaType != "application/vnd.docker.container.image.v1+json" {
-		return fmt.Errorf("Unsupported docker image manifest config media type %q", manifest.Config.MediaType)
+	for _, ref := range idx.Manifests {
+		// TODO: select by Platform.Architecture, Platform.OS
+		d := ref.Digest
+		sep := strings.Index(string(d), ":")
+		if sep < 1 {
+			panic(fmt.Sprintf("no ':' separator in index digest %q", d))
+		}
+		algorithm := string(d.Algorithm())
+		enc := string(d[sep+1:])
+		manifestFile := filepath.Join(imgDir, "blobs", algorithm, enc)
+		var manifest spec.Manifest
+		if err = unmarshalJSON(manifestFile, &manifest); err != nil {
+			return fmt.Errorf("Cannot read OCI image manifest: %v", err)
+		}
+		d = manifest.Config.Digest
+		sep = strings.Index(string(d), ":")
+		if sep < 1 {
+			panic(fmt.Sprintf("no ':' separator in manifest digest %q", d))
+		}
+		algorithm = string(d.Algorithm())
+		enc = string(d[sep+1:])
+		configFile := filepath.Join(imgDir, "blobs", algorithm, enc)
+		var config spec.Image
+		if err = unmarshalJSON(configFile, &config); err != nil {
+			return fmt.Errorf("Cannot read OCI image config: %v", err)
+		}
+		cfg := config.Config
+		// TODO: split entrypoint/cmd
+		if cfg.Entrypoint != nil {
+			dest.Exec = append(dest.Exec, cfg.Entrypoint...)
+		}
+		if cfg.Cmd != nil {
+			dest.Exec = append(dest.Exec, cfg.Cmd...)
+		}
+		// TODO: add user/workdir/ports
 	}
-	digestParts := strings.SplitN(manifest.Config.Digest, ":", 2)
-	if len(digestParts) != 2 {
-		return fmt.Errorf("Unsupported manifest config digest %q", manifest.Config.Digest)
-	}
-	cfgFile := filepath.Join(dir, digestParts[1]+".tar")
-	var conf dockerImageMetadata
-	err = unmarshalJSON(cfgFile, &conf)
-	cfg := conf.Config
-	// TODO: split entrypoint/cmd
-	if cfg.Entrypoint != nil {
-		dest.Exec = append(dest.Exec, cfg.Entrypoint...)
-	}
-	if cfg.Cmd != nil {
-		dest.Exec = append(dest.Exec, cfg.Cmd...)
-	}
-	// TODO: add user/workdir/ports
 	return nil
 }
 
@@ -168,20 +167,20 @@ func unmarshalJSON(file string, dest interface{}) error {
 	return json.Unmarshal(b, dest)
 }
 
-type dockerImageManifest struct {
-	Config dockerImageManifestConfigRef `json:"config"`
+type OCIImageManifest struct {
+	Config OCIImageManifestConfigRef `json:"config"`
 }
 
-type dockerImageManifestConfigRef struct {
+type OCIImageManifestConfigRef struct {
 	MediaType string `json:"mediaType"`
 	Digest    string `json:"digest"`
 }
 
-type dockerImageMetadata struct {
-	Config dockerImageConfig `json:"config"`
+type OCIImageArchitectureSpecificConfig struct {
+	Config OCIImageConfig `json:"config"`
 }
 
-type dockerImageConfig struct {
+type OCIImageConfig struct {
 	User       string
 	WorkingDir string
 	Entrypoint []string

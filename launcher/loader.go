@@ -111,7 +111,7 @@ func (self *Loader) toServices(d *model.PodDescriptor) (map[string]*Service, err
 			return nil, err
 		}
 		// Assign properties derived from image
-		if len(v.Entrypoint) == 0 {
+		if len(v.Entrypoint) == 0 && len(img.Exec) > 0 {
 			v.Entrypoint = []string{img.Exec[0]}
 			if len(v.Command) == 0 {
 				v.Command = img.Exec[1:]
